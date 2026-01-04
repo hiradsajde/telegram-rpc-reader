@@ -1,0 +1,18 @@
+services:
+  telegram-api:
+    build: .
+    container_name: telegram_fastapi
+    restart: unless-stopped
+
+    # Environment variables for Telethon
+    environment:
+      API_ID: ${API_ID}
+      API_HASH: ${API_HASH}
+
+    # Mount volume for SQLite database and Telethon session file
+    volumes:
+      - ./data:/app/data
+
+    # Map container port to host
+    ports:
+      - "8000:8000"
