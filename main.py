@@ -1,9 +1,11 @@
 import os
+import logging
 import asyncio
 from datetime import datetime, timedelta
 from typing import List, Optional
-
-from fastapi import FastAPI, Query, BackgroundTasks
+from fastapi import FastAPI, Query, BackgroundTasks, Request
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
 from sqlalchemy import (
     Column, Integer, String, DateTime, Text, select, desc
 )
@@ -54,21 +56,38 @@ client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
 # ---------------- APP ----------------
 app = FastAPI()
 
+# Disable uvicorn default error logging
+logging.getLogger("uvicorn.error").disabled = True
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Return clean response, no traceback
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
+
 # ---------------- UTILITIES ----------------
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # startup
     await init_db()
     await client.start()
+    yield
 
 def is_cache_valid(fetched_at: datetime) -> bool:
     return fetched_at > datetime.utcnow() - timedelta(hours=CACHE_HOURS)
 
 # ---------------- TELEGRAM FETCH ----------------
-async def fetch_and_store_all(username: str):
+async def fetch_and_store_all(username: str) -> tuple[int, int]:
+    read_count = 0
+    stored_count = 0
+
     async with AsyncSessionLocal() as db:
         offset_id = 0
         limit = 100
@@ -91,6 +110,8 @@ async def fetch_and_store_all(username: str):
                 break
 
             for msg in history.messages:
+                read_count += 1
+
                 if not msg.message:
                     continue
 
@@ -110,9 +131,12 @@ async def fetch_and_store_all(username: str):
                     date=msg.date,
                     fetched_at=datetime.utcnow()
                 ))
+                stored_count += 1
 
             await db.commit()
             offset_id = history.messages[-1].id
+
+    return read_count, stored_count
 
 # ---------------- ROUTES ----------------
 
@@ -170,8 +194,20 @@ async def read_all(username: str = Query(...)):
         posts = result.scalars().all()
 
         if not posts or not is_cache_valid(posts[0].fetched_at):
-            await fetch_and_store_all(username)
+            read_count, stored_count = await fetch_and_store_all(username)
+
+            print(
+                f"[READ-ALL] Channel: {username} | "
+                f"Read from Telegram: {read_count} | "
+                f"Stored in SQLite: {stored_count}"
+            )
+
             return await read_all(username)
+
+        print(
+            f"[READ-ALL] Channel: {username} | "
+            f"Returned from cache: {len(posts)} posts"
+        )
 
         return [
             {

@@ -1,1 +1,1 @@
-python3 -m uvicorn main:app --reload
+python -m jupyter lab
