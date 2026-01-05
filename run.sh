@@ -1,2 +1,2 @@
+# uvicorn main:app --host 0.0.0.0 --port 8000
 python -m jupyter lab
-# uvicorn app:app --host 0.0.0.0 --port 8000

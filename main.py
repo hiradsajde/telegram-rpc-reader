@@ -52,22 +52,6 @@ AsyncSessionLocal = sessionmaker(
 
 # ---------------- TELETHON ----------------
 client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
-
-# ---------------- APP ----------------
-app = FastAPI()
-
-# Disable uvicorn default error logging
-logging.getLogger("uvicorn.error").disabled = True
-
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    # Return clean response, no traceback
-    return JSONResponse(
-        status_code=500,
-        content={"detail": "Internal Server Error"},
-    )
-
 # ---------------- UTILITIES ----------------
 async def init_db():
     async with engine.begin() as conn:
@@ -82,6 +66,22 @@ async def lifespan(app: FastAPI):
 
 def is_cache_valid(fetched_at: datetime) -> bool:
     return fetched_at > datetime.utcnow() - timedelta(hours=CACHE_HOURS)
+
+
+# ---------------- APP ----------------
+app = FastAPI(lifespan=lifespan)
+
+# Disable uvicorn default error logging
+# logging.getLogger("uvicorn.error").disabled = True
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    # Return clean response, no traceback
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"},
+    )
 
 # ---------------- TELEGRAM FETCH ----------------
 async def fetch_and_store_all(username: str) -> tuple[int, int]:
