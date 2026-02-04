@@ -1,6 +1,9 @@
 import os
-import logging
 import asyncio
+import logging
+import subprocess
+from telethon import TelegramClient
+from telethon.sessions import StringSession
 from datetime import datetime, timedelta
 from typing import List, Optional
 from fastapi import FastAPI, Query, BackgroundTasks, Request
@@ -16,9 +19,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from telethon import TelegramClient
 from telethon.tl.functions.messages import GetHistoryRequest
-
 from dotenv import load_dotenv
-load_dotenv() 
+load_dotenv()
 
 # ---------------- CONFIG ----------------
 API_ID = int(os.getenv("API_ID"))
@@ -31,6 +33,7 @@ DATABASE_URL = os.getenv(
 )
 
 CACHE_HOURS = int(os.getenv("CACHE_HOURS", 24))
+NOTEBOOK_PATH = "notebook.ipynb"
 
 # ---------------- DB ----------------
 Base = declarative_base()
@@ -168,7 +171,6 @@ async def read_posts(
 
         posts = result.scalars().all()
 
-        # اگر دیتای تازه نداشت، از تلگرام بگیر
         if not posts or not is_cache_valid(posts[0].fetched_at):
             await fetch_and_store_all(username)
             return await read_posts(username, page, per_page)
@@ -217,3 +219,33 @@ async def read_all(username: str = Query(...)):
             }
             for p in posts
         ]
+
+async def create_session():
+    # Create Telegram client and start login process
+    client = TelegramClient(SESSION_NAME, API_ID, API_HASH)
+
+    await client.start()
+    print("✅ Session created successfully")
+
+    # Export session as StringSession (optional, useful for env/db)
+    string_session = StringSession.save(client.session)
+    print("🔑 STRING_SESSION:")
+    print(string_session)
+
+    await client.disconnect()
+
+def run_notebook():
+    # Launch Jupyter Notebook and open the specified file
+    print("🚀 Launching Jupyter Notebook...")
+    subprocess.run([
+        "jupyter",
+        "lab",
+        NOTEBOOK_PATH
+    ])
+
+async def main():
+    await create_session()
+    run_notebook()
+
+if __name__ == "__main__":
+    asyncio.run(main())

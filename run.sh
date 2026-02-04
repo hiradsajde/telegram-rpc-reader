@@ -1,2 +1,2 @@
-# uvicorn main:app --host 0.0.0.0 --port 8000
-python -m jupyter lab
+pip install -r requirement.txt
+python main.py
